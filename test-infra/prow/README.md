@@ -8,6 +8,20 @@ Prow 是 Kubernetes 测试特别兴趣小组的项目，目前是 kubernetes/tes
 自动合并 PR
 使用 Prow ，我们可以将研发流程自动化，极大地提升了开发体验。
 
+**核心组件**
+
+* Hook: Prow 最核心的组件，它是一个无状态服务，开启 /hook 路由接收 GitHub webhooks (events)，验证 hmac secret 并根据 event type 分发任务到不同的 plugin 中执行。plugin 负责触发 jobs、实现 /foo 样式命令的 chat-ops、通知到 Slack 等工作。Prow 在部署时，可以配置你的 repo 使用哪些 plugin。
+* Plank: Prowjob controller，负责管理在 kubernetes 中 job 的执行与生命周期。
+* Deck: 一个 dashboard，展示 job、PR 的状态信息，还有各种 Hook Plugins 对应的 chat-ops 命令帮助信息。Kubernetes 官方的 Deck 链接：https://prow.k8s.io。
+* Horologium: 根据策略创建 Periodics 类型的 job。
+* Sinker: 定时清理旧的 job 和相关联的 job 状态是 finished 的 pod，清理周期可配置。
+
+**自动化合入 PR**
+* Tide: 自动重新测试 PR，并根据预先设定的合并标准，自动化合并 PR。
+
+**辅助组件**
+* Crier: Prowjob controller，负责 watch job status，并更新 reporter 的 status。reporter 目前支持 Gerrit、Pubsub、GitHub。（功能上与 Plank 有所重复，择一即可）。
+
 # 2. 部署
 ## 2.1 准备一个github账户
 1. 准备一个github账户个人账户或者专门执行人物的机器人账户也行，将机器人账户添加为仓库管理员。
