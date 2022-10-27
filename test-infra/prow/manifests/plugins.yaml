@@ -1,0 +1,15 @@
+plugins:
+  shaowenchen/prow-test:
+    - size
+    - lgtm
+    - approve
+    - label
+    - trigger
+    - hold
+    - verify-owners
+    - wip
+    - milestone
+    - welcome
+    - heart
+    - help
+    - assign
