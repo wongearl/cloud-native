@@ -1,0 +1,273 @@
+---
+daemonset:
+  # Annotations to apply to the daemonset
+  annotations: {}
+  # additionals labels
+  labels: {}
+  affinity: {}
+  # Include the daemonset
+  enabled: true
+  # Extra environment variables for Filebeat container.
+  envFrom: []
+  # - configMapRef:
+  #     name: config-secret
+  extraEnvs:
+  #  - name: MY_ENVIRONMENT_VAR
+  #    value: the_value_goes_here
+    - name: ELASTIC_USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: elastic-credentials
+          key: username
+    - name: ELASTIC_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: elastic-credentials
+          key: password
+  extraVolumes: []
+    # - name: extras
+    #   emptyDir: {}
+  extraVolumeMounts:
+    # - name: extras
+    #   mountPath: /usr/share/extras
+    #   readOnly: true
+  hostNetworking: false
+  # Allows you to add any config files in /usr/share/filebeat
+  # such as filebeat.yml for daemonset
+  filebeatConfig:
+    # filebeat.yml 配置
+    filebeat.yml: |
+      # 数据输入，读取日志的位置，这里是直接读取宿主机的相应目录，
+      # 运行环境中的Docker中业务日志，如果需要使用 ELK 查看需要挂载到宿主机的相关目录下。
+      filebeat.inputs:
+      # 读取类型
+      - type: log
+        # 开关
+        enabled: true
+        # 日志路径，宿主机上的文件路径
+        paths:
+          - /var/log/containers/*.log
+        # 区分业务日志，添加的 tag, 在 logstash 处理时会根据这个来进行解析并分发到 ES 存储。
+        tags: ['spider_info']
+        # 多行日志的换行规则（开头到结尾的位置定位）
+        multiline.pattern: '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}:\d{3}'  
+        multiline.negate: true
+        multiline.match: after
+      # 输出到 elasticsearch
+      output.logstash:
+        # logstash 的 Service 服务和端口
+        hosts: '${ELASTICSEARCH_HOSTS:logstash-logstash:5044}'
+        # 启用 Logstash 负载均衡
+        loadbalance: true
+        index: filebeat
+      # Filebeat 自身日志配置
+      logging:
+        level: info
+        to_files: true
+        files:
+          path: /var/log/filebeat
+          name: filebeat.log
+          keepfiles: 7
+          permissions: 0644
+      # Filebeat 监控配置（数据传输到 ES）
+      monitoring:
+        enabled: true
+        #cluster_uuid: gPgughR6T3eYHfmoiG9n_g
+        elasticsearch:
+          hosts: ['${ELASTICSEARCH_HOSTS:elasticsearch-master:9200}']
+          username: '${ELASTIC_USERNAME}'
+          password: '${ELASTIC_PASSWORD}'
+
+  # Only used when updateStrategy is set to "RollingUpdate"
+  maxUnavailable: 1
+  nodeSelector: {}
+  # A list of secrets and their paths to mount inside the pod
+  # This is useful for mounting certificates for security other sensitive values
+  secretMounts:
+    - name: elastic-certificates
+      secretName: elastic-certificates
+      path: /usr/share/filebeat/certs
+  #  - name: filebeat-certificates
+  #    secretName: filebeat-certificates
+  #    path: /usr/share/filebeat/certs
+  # Various pod security context settings. Bear in mind that many of these have an impact on Filebeat functioning properly.
+  #
+  # - User that the container will execute as. Typically necessary to run as root (0) in order to properly collect host container logs.
+  # - Whether to execute the Filebeat containers as privileged containers. Typically not necessarily unless running within environments such as OpenShift.
+  securityContext:
+    runAsUser: 0
+    privileged: false
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "100Mi"
+    limits:
+      cpu: "1000m"
+      memory: "200Mi"
+  tolerations: []
+
+deployment:
+  # Annotations to apply to the deployment
+  annotations: {}
+  # additionals labels
+  labels: {}
+  affinity: {}
+  # Include the deployment
+  enabled: false
+  # Extra environment variables for Filebeat container.
+  envFrom: []
+  # - configMapRef:
+  #     name: config-secret
+  extraEnvs: []
+  #  - name: MY_ENVIRONMENT_VAR
+  #    value: the_value_goes_here
+  # Allows you to add any config files in /usr/share/filebeat
+  extraVolumes: []
+  # - name: extras
+  #   emptyDir: {}
+  extraVolumeMounts: []
+  # - name: extras
+  #   mountPath: /usr/share/extras
+  #   readOnly: true
+  # such as filebeat.yml for deployment
+  filebeatConfig:
+    filebeat.yml: |
+      filebeat.inputs:
+      - type: tcp
+        max_message_size: 10MiB
+        host: "localhost:9000"
+
+      output.elasticsearch:
+        host: '${NODE_NAME}'
+        hosts: '${ELASTICSEARCH_HOSTS:elasticsearch-master:9200}'
+  nodeSelector: {}
+  # A list of secrets and their paths to mount inside the pod
+  # This is useful for mounting certificates for security other sensitive values
+  secretMounts: []
+  #  - name: filebeat-certificates
+  #    secretName: filebeat-certificates
+  #    path: /usr/share/filebeat/certs
+  #
+  # - User that the container will execute as.
+  # Not necessary to run as root (0) as the Filebeat Deployment use cases do not need access to Kubernetes Node internals
+  # - Typically not necessarily unless running within environments such as OpenShift.
+  securityContext:
+    runAsUser: 0
+    privileged: false
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "100Mi"
+    limits:
+      cpu: "1000m"
+      memory: "200Mi"
+  tolerations: []
+
+# Replicas being used for the filebeat deployment
+replicas: 1
+
+extraContainers: ""
+# - name: dummy-init
+#   image: busybox
+#   command: ['echo', 'hey']
+
+extraInitContainers: []
+# - name: dummy-init
+
+# Root directory where Filebeat will write data to in order to persist registry data across pod restarts (file position and other metadata).
+hostPathRoot: /var/lib
+
+dnsConfig: {}
+# options:
+#   - name: ndots
+#     value: "2"
+hostAliases: []
+#- ip: "127.0.0.1"
+#  hostnames:
+#  - "foo.local"
+#  - "bar.local"
+image: "docker.elastic.co/beats/filebeat"
+imageTag: "7.13.1"
+imagePullPolicy: "IfNotPresent"
+imagePullSecrets: []
+
+livenessProbe:
+  exec:
+    command:
+      - sh
+      - -c
+      - |
+        #!/usr/bin/env bash -e
+        curl --fail 127.0.0.1:5066
+  failureThreshold: 3
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+
+readinessProbe:
+  exec:
+    command:
+      - sh
+      - -c
+      - |
+        #!/usr/bin/env bash -e
+        filebeat test output
+  failureThreshold: 3
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+
+# Whether this chart should self-manage its service account, role, and associated role binding.
+managedServiceAccount: true
+
+clusterRoleRules:
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  - nodes
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+
+podAnnotations: {}
+  # iam.amazonaws.com/role: es-cluster
+
+# Custom service account override that the pod will use
+serviceAccount: ""
+
+# Annotations to add to the ServiceAccount that is created if the serviceAccount value isn't set.
+serviceAccountAnnotations: {}
+
+  # eks.amazonaws.com/role-arn: arn:aws:iam::111111111111:role/k8s.clustername.namespace.serviceaccount
+
+# How long to wait for Filebeat pods to stop gracefully
+terminationGracePeriod: 30
+# This is the PriorityClass settings as defined in
+# https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/#priorityclass
+priorityClassName: ""
+
+updateStrategy: RollingUpdate
+
+# Override various naming aspects of this chart
+# Only edit these if you know what you're doing
+nameOverride: ""
+fullnameOverride: ""
+
+# DEPRECATED
+affinity: {}
+envFrom: []
+extraEnvs: []
+extraVolumes: []
+extraVolumeMounts: []
+# Allows you to add any config files in /usr/share/filebeat
+# such as filebeat.yml for both daemonset and deployment
+filebeatConfig: {}
+nodeSelector: {}
+podSecurityContext: {}
+resources: {}
+secretMounts: []
+tolerations: []
+labels: {}

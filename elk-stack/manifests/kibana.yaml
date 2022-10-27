@@ -1,0 +1,152 @@
+---
+# Source: kibana/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kibana-config
+  labels:
+    app: kibana
+data:
+  kibana.yml: |
+    # es 集群的账号、密码、SSL 证书
+    elasticsearch:
+      username: '${ELASTICSEARCH_USERNAME}'
+      password: '${ELASTICSEARCH_PASSWORD}'
+      ssl:
+        certificate: /usr/share/kibana/config/certs/elastic-certificates.p12
+        key: /usr/share/kibana/config/certs/elastic-certificates.p12
+        verificationMode: certificate
+    # xpack 开启
+    xpack:
+      security:
+        enabled: true
+---
+# Source: kibana/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: release-name-kibana
+  labels:
+    app: kibana
+spec:
+  type: NodePort
+  ports:
+    - port: 5601
+      protocol: TCP
+      name: http
+      targetPort: 5601
+  selector:
+    app: kibana
+---
+# Source: kibana/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kibana-logging
+  labels:
+    app: kibana
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: kibana
+  template:
+    metadata:
+      labels:
+        app: kibana
+      annotations:
+        configchecksum: 8a7cc00606eae3bca8eb8d2226443176ee7d086fc9dd9b30bb47d603c84a8f6
+    spec:
+      securityContext:
+        fsGroup: 1000
+      volumes:
+        - name: elastic-certificates
+          secret:
+            secretName: elastic-certificates
+        - name: elastic-certificate-pem
+          secret:
+            secretName: elastic-certificate-pem
+        - name: kibanaconfig
+          configMap:
+            name: release-name-kibana-config
+      containers:
+        - name: kibana
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            runAsUser: 1000
+          image: "docker.elastic.co/kibana/kibana:7.13.1"
+          imagePullPolicy: "IfNotPresent"
+          env:
+            - name: ELASTICSEARCH_HOSTS
+              value: "http://elasticsearch-master:9200"
+            - name: SERVER_HOST
+              value: "0.0.0.0"
+            - name: NODE_OPTIONS
+              value: --max-old-space-size=1800
+            - name: ELASTICSEARCH_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  key: username
+                  name: elastic-credentials
+            - name: ELASTICSEARCH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: password
+                  name: elastic-credentials
+          readinessProbe:
+            failureThreshold: 3
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            successThreshold: 3
+            timeoutSeconds: 5
+            exec:
+              command:
+                - sh
+                - -c
+                - |
+                  #!/usr/bin/env bash -e
+                  
+                  # Disable nss cache to avoid filling dentry cache when calling curl
+                  # This is required with Kibana Docker using nss < 3.52
+                  export NSS_SDB_USE_CACHE=no
+                  
+                  http () {
+                      local path="${1}"
+                      set -- -XGET -s --fail -L
+                  
+                      if [ -n "${ELASTICSEARCH_USERNAME}" ] && [ -n "${ELASTICSEARCH_PASSWORD}" ]; then
+                        set -- "$@" -u "${ELASTICSEARCH_USERNAME}:${ELASTICSEARCH_PASSWORD}"
+                      fi
+                  
+                      STATUS=$(curl --output /dev/null --write-out "%{http_code}" -k "$@" "http://localhost:5601${path}")
+                      if [[ "${STATUS}" -eq 200 ]]; then
+                        exit 0
+                      fi
+                  
+                      echo "Error: Got HTTP code ${STATUS} but expected a 200"
+                      exit 1
+                  }
+                  
+                  http "/app/kibana"
+          ports:
+            - containerPort: 5601
+          resources:
+            limits:
+              cpu: "1"
+            requests:
+              cpu: 100m
+          volumeMounts:
+            - name: elastic-certificates
+              mountPath: /usr/share/kibana/config/certs/elastic-certificates.p12
+              subPath: elastic-certificates.p12
+            - name: elastic-certificate-pem
+              mountPath: /usr/share/kibana/config/certs/elastic-certificate.pem
+              subPath: elastic-certificate.pem
+            - name: kibanaconfig
+              mountPath: /usr/share/kibana/config/kibana.yml
+              subPath: kibana.yml
