@@ -1,0 +1,6 @@
+appname: test-app
+replicas: 3
+image: registry.cn-hangzhou.aliyuncs.com/earl-k8s/nginx
+imageTag: 1.23.1
+nfsPath: /data2/k8s/know
+nfsServer: 192.168.75.130

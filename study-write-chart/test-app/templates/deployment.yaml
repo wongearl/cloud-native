@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: {{ .Values.appname }}			#将values.yaml中的appname对应的变量值渲染在这里
+  name: know-system
+spec:
+  replicas: {{ .Values.replicas }}		#将values.yaml中的replicas对应的变量值渲染在这里
+  selector:
+    matchLabels:
+      app: {{ .Values.appname }}		#标签可以和资源名称一样，因此也可以直接调用appname变量
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.appname }}		#标签可以和资源名称一样，因此也可以直接调用appname变量
+    spec:
+      containers:
+        - image: {{ .Values.image }}:{{ .Values.imageTag }}		#将values.yaml中的image、imageTag对应的变量值渲染在这里,表示镜像的版本号
+          name: {{ .Values.appname }}			#容器的名称也和资源的名称保持一致即可
+          ports:
+            - name: web
+              containerPort: 80
+              protocol: TCP
+          volumeMounts:
+            - name: code
+              mountPath: /data/code/
+            - name: config
+              mountPath: /data/nginx/conf/conf.d/
+      volumes:
+        - name: config
+          configMap:
+            name: {{ .Values.appname }}-cm				#confimap的名字也可以使用程序名称的变量加上-cm
+        - name : code
+          persistentVolumeClaim:
+            claimName: {{ .Values.appname }}-pvc		#pvc的名字也可以使用程序名称的变量加上-pv
+            readOnly: false

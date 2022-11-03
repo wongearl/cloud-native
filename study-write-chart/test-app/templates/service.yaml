@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: {{ .Values.appname }}			#service要管理deployment的pod资源，因此这里的标签要和pod资源的标签对应上，直接调用appname这个变量
+  name: {{ .Values.appname }}-svc		#service资源的名称，也可以直接调用appname这个变量，后面加一个-svc
+spec:
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 80
+  selector:
+    app: {{ .Values.appname }}			#标签选择器还是调用appname这个变量
+  type: NodePort

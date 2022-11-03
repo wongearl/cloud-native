@@ -1,0 +1,29 @@
+apiVersion: v1
+kind:  PersistentVolume
+metadata:
+  name: {{ .Values.appname }}-pv			#引入appname变量加上-pv作为pv资源的名称
+  labels:
+    pv: {{ .Values.appname }}-pv			#标签也可以使用和pv名称一样的名字
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  nfs:
+    path: {{ .Values.nfsPath }}
+    server: {{ .Values.nfsServer }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.appname }}-pvc			#引入appname变量加上-pvc作为pvc资源的名称
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+  selector:
+    matchLabels:
+      pv: {{ .Values.appname }}-pv			#指定pv的标签

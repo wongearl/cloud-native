@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.appname }}-cm			#引入appname变量加上-cm作为cm资源的名称
+data:
+  know.jiangxl.com.conf: |
+    server {
+      listen 80;
+      server_name know.jiangxl.com;
+      location / {
+        root /data/code/know_system;
+        index index.html;
+      }
+    }
